@@ -36,9 +36,11 @@ function normalizeMinhaReceitaPartners(partners) {
 
   return partners.map((socio) => ({
     nome: getFirstValue(socio.nome_socio, socio.nome),
-    tipo: getFirstValue(socio.identificador_socio, socio.tipo),
+    tipo: socio.identificador_de_socio === 1 || socio.identificador_socio === 1
+      ? "Pessoa Juridica"
+      : getFirstValue(socio.tipo, "Pessoa Fisica"),
     faixa_etaria: getFirstValue(socio.faixa_etaria),
-    documento: getFirstValue(
+    cpf_cnpj_socio: getFirstValue(
       socio.cnpj_cpf_do_socio,
       socio.cnpj_cpf_socio,
       socio.documento

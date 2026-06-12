@@ -81,7 +81,9 @@ export async function buscarEmpresasPorDocumentoSocio(documento) {
   }
 
   try {
-    return await fetchMinhaReceitaBySocioDocument(cleanDocument);
+    const payload = await fetchMinhaReceitaBySocioDocument(cleanDocument);
+    const companies = Array.isArray(payload?.data) ? payload.data : [];
+    return companies.map(normalizeMinhaReceitaToCnpjWsFormat);
   } catch (error) {
     throw new ConsultaError(error.message, {
       source: "minha_receita",

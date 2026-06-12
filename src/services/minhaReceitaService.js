@@ -53,7 +53,7 @@ export async function fetchMinhaReceitaBySocioDocument(documento) {
     );
   }
 
-  const response = await fetch(`${MINHA_RECEITA_BASE_URL}/?cnpf=${cleanDocument}`);
+  const response = await fetch(`${MINHA_RECEITA_BASE_URL}/?cnpf=${cleanDocument}&limit=20`);
 
   if (!response.ok) {
     if (response.status === 404) {

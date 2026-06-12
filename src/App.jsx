@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { consultarCnpj as consultarCnpjService, buscarEmpresasPorDocumentoSocio } from "./services/consultaService";
 
 const STORAGE_KEY = "consulta-cnpj:empresas";
 
@@ -203,136 +204,6 @@ function getPhone(est) {
   return [est.ddd1, est.telefone1].filter(Boolean).join(" ");
 }
 
-function normalizeMinhaReceitaCompany(raw) {
-  if (!raw || typeof raw !== "object") return raw;
-
-  return {
-    cnpj: raw.cnpj,
-    razao_social: raw.razao_social,
-    nome_fantasia: raw.nome_fantasia,
-    capital_social: raw.capital_social,
-    porte: raw.porte ? { descricao: raw.porte } : null,
-    natureza_juridica: raw.natureza_juridica ? { id: raw.codigo_natureza_juridica, descricao: raw.natureza_juridica } : null,
-    qualificacao_do_responsavel: raw.qualificacao_do_responsavel,
-    socios: Array.isArray(raw.qsa)
-      ? raw.qsa.map((socio) => ({
-          cpf_cnpj_socio: socio.cnpj_cpf_do_socio,
-          nome: socio.nome_socio,
-          tipo: socio.identificador_de_socio === 1 ? "Pessoa Juridica" : "Pessoa Fisica",
-          data_entrada: socio.data_entrada_sociedade,
-          faixa_etaria: socio.faixa_etaria,
-          qualificacao_socio: {
-            id: socio.codigo_qualificacao_socio,
-            descricao: socio.qualificacao_socio,
-          },
-          cpf_representante_legal: socio.cpf_representante_legal,
-          nome_representante: socio.nome_representante_legal,
-          qualificacao_representante: socio.qualificacao_representante_legal,
-        }))
-      : [],
-    estabelecimento: {
-      cnpj: raw.cnpj,
-      nome_fantasia: raw.nome_fantasia,
-      atividade_principal: raw.cnae_fiscal
-        ? {
-            subclasse: String(raw.cnae_fiscal),
-            descricao: raw.cnae_fiscal_descricao,
-          }
-        : null,
-      atividades_secundarias: raw.cnaes_secundarios || [],
-      data_inicio_atividade: raw.data_inicio_atividade,
-      situacao_cadastral: raw.descricao_situacao_cadastral
-        ? { id: raw.situacao_cadastral, descricao: raw.descricao_situacao_cadastral }
-        : null,
-      data_situacao_cadastral: raw.data_situacao_cadastral,
-      cidade: raw.municipio ? { id: raw.codigo_municipio, ibge_id: raw.codigo_municipio_ibge, nome: raw.municipio } : null,
-      estado: raw.uf ? { sigla: raw.uf } : null,
-      tipo_logradouro: raw.descricao_tipo_de_logradouro,
-      logradouro: raw.logradouro,
-      numero: raw.numero,
-      complemento: raw.complemento,
-      bairro: raw.bairro,
-      cep: raw.cep,
-      ddd1: String(raw.ddd_telefone_1 || "").slice(0, 2),
-      telefone1: String(raw.ddd_telefone_1 || "").slice(2),
-      ddd2: String(raw.ddd_telefone_2 || "").slice(0, 2),
-      telefone2: String(raw.ddd_telefone_2 || "").slice(2),
-      email: raw.email,
-      motivo_situacao_cadastral: raw.descricao_motivo_situacao_cadastral,
-      situacao_especial: raw.situacao_especial,
-      data_situacao_especial: raw.data_situacao_especial,
-    },
-    simples: {
-      simples: raw.opcao_pelo_simples,
-      data_opcao_simples: raw.data_opcao_pelo_simples,
-      data_exclusao_simples: raw.data_exclusao_do_simples,
-      mei: raw.opcao_pelo_mei,
-      data_opcao_mei: raw.data_opcao_pelo_mei,
-      data_exclusao_mei: raw.data_exclusao_do_mei,
-    },
-    _source: "Minha Receita",
-    _raw: raw,
-  };
-}
-
-async function fetchJsonOrThrow(url, options = {}) {
-  const res = await fetch(url, {
-    headers: { Accept: "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-
-  if (!res.ok) {
-    const error = new Error(`${res.status} ${res.statusText}`);
-    error.status = res.status;
-    throw error;
-  }
-
-  return res.json();
-}
-
-async function fetchCompanyByCnpj(cnpj) {
-  try {
-    const data = await fetchJsonOrThrow(`https://publica.cnpj.ws/cnpj/${cnpj}`);
-    return { ...data, _source: "CNPJ.ws API Publica" };
-  } catch (firstError) {
-    if (firstError.status === 404) throw firstError;
-
-    try {
-      const data = await fetchJsonOrThrow(`https://minhareceita.org/${cnpj}`);
-      return normalizeMinhaReceitaCompany(data);
-    } catch (secondError) {
-      if (secondError.status === 404) throw secondError;
-      secondError.message = `CNPJ.ws falhou (${firstError.message}); Minha Receita falhou (${secondError.message})`;
-      throw secondError;
-    }
-  }
-}
-
-function buildPartnerDocumentQuery(value) {
-  const raw = String(value ?? "").trim();
-  const digits = onlyDigits(raw);
-
-  if (raw.includes("*")) return raw.replace(/[^\d*]/g, "");
-  if (digits.length === 14) return digits;
-  if (digits.length === 11) return `***${digits.slice(3, 9)}**`;
-  if (digits.length === 6) return `***${digits}**`;
-  return null;
-}
-
-async function searchCompaniesByPartnerDocument(value) {
-  const cnpf = buildPartnerDocumentQuery(value);
-  if (!cnpf) {
-    const error = new Error("Informe um CNPJ completo, CPF completo ou os 6 digitos centrais do CPF do socio.");
-    error.type = "invalid";
-    throw error;
-  }
-
-  const params = new URLSearchParams({ cnpf, limit: "20" });
-  const payload = await fetchJsonOrThrow(`https://minhareceita.org/?${params.toString()}`);
-  const companies = Array.isArray(payload?.data) ? payload.data : [];
-
-  return companies.map(normalizeMinhaReceitaCompany);
-}
 
 function countFields(obj) {
   if (!obj || typeof obj !== "object") return 0;
@@ -703,23 +574,20 @@ export default function App() {
 
       setLoading(true);
       try {
-        const json = await fetchCompanyByCnpj(cleanCnpj);
+        const json = await consultarCnpjService(cleanCnpj);
         setData(json);
         saveCompany(json);
       } catch (e) {
         const msg = e?.message || "";
-        if (e?.status === 400) {
-          setError({
-            type: "invalid",
-            msg: `CNPJ ${fmt.cnpj(cleanCnpj)} rejeitado pelas APIs gratuitas. Confira se os digitos estao corretos.`,
-          });
-          return;
-        }
-        if (e?.status === 404) {
+        const details = e?.details || [];
+        const hasNotFound = details.every?.((d) => d.status === 404) || e?.details?.status === 404;
+        const hasRateLimit = details.some?.((d) => d.status === 429) || e?.details?.status === 429;
+
+        if (hasNotFound) {
           setError({ type: "notfound", msg: "CNPJ nao encontrado nas APIs gratuitas consultadas." });
           return;
         }
-        if (e?.status === 429) {
+        if (hasRateLimit) {
           setError({ type: "ratelimit", msg: "A API gratuita atingiu limite temporario. Aguarde alguns segundos e tente novamente." });
           return;
         }
@@ -727,7 +595,7 @@ export default function App() {
           type: "network",
           msg: msg.includes("Failed to fetch")
             ? "Falha de rede ou bloqueio de CORS nas APIs gratuitas. O app ainda pesquisa no historico local."
-            : `Falha de rede: ${msg || "verifique a conexao e tente novamente."}`,
+            : msg || "Falha ao consultar o CNPJ. Verifique a conexao e tente novamente.",
         });
       } finally {
         setLoading(false);
@@ -748,7 +616,7 @@ export default function App() {
     setLoading(true);
     setRemoteMatches([]);
     try {
-      const companies = await searchCompaniesByPartnerDocument(input);
+      const companies = await buscarEmpresasPorDocumentoSocio(onlyDigits(input));
       const results = companies.map((company) => ({
         company,
         reason: "Minha Receita global",
@@ -761,13 +629,13 @@ export default function App() {
       if (results.length === 0) {
         setError({
           type: "notfound",
-          msg: "Nenhuma empresa encontrada na busca global por documento de socio. Tente CPF completo, CNPJ completo ou CPF mascarado no formato ***456789**.",
+          msg: "Nenhuma empresa encontrada na busca global por documento de socio. Tente CPF completo, CNPJ completo ou os 6 digitos centrais do CPF.",
         });
       }
     } catch (e) {
       setError({
-        type: e?.type || "network",
-        msg: e?.type === "invalid" ? e.message : `Falha na busca global gratuita da Minha Receita: ${e?.message || "tente novamente."}`,
+        type: "network",
+        msg: e?.message || "Falha na busca global gratuita da Minha Receita. Tente novamente.",
       });
     } finally {
       setLoading(false);
