@@ -53,6 +53,11 @@ const SEARCH_MODES = [
   { id: "document", label: "CPF/CNPJ socio", placeholder: "CPF/CNPJ parcial ou mascarado" },
 ];
 
+const UFS = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+  "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+];
+
 function findMatches(companies, mode, query) {
   const textQ = normalizeText(query);
   const digitQ = onlyDigits(query);
@@ -105,6 +110,7 @@ export default function App() {
   const [showBatch, setShowBatch] = useState(false);
   const [remoteMatches, setRemoteMatches] = useState([]);
   const [quickCnpj, setQuickCnpj] = useState("");
+  const [socioUf, setSocioUf] = useState("");
   const [savedCompanies, setSavedCompanies] = useState(readHistory);
 
   useEffect(() => { writeHistory(savedCompanies); }, [savedCompanies]);
@@ -145,12 +151,12 @@ export default function App() {
   };
 
   const changeMode = (next) => {
-    setMode(next); setInput(""); setError(null); setRemoteMatches([]); setQuickCnpj("");
+    setMode(next); setInput(""); setError(null); setRemoteMatches([]); setQuickCnpj(""); setSocioUf("");
   };
 
   const resetSearch = () => {
     setInput(""); setError(null); setData(null); setIsDemo(false);
-    setShowRaw(false); setCopied(false); setRemoteMatches([]); setQuickCnpj("");
+    setShowRaw(false); setCopied(false); setRemoteMatches([]); setQuickCnpj(""); setSocioUf("");
   };
 
   const loadDemo = () => {
@@ -200,20 +206,20 @@ export default function App() {
   const searchPartnerDocument = useCallback(async () => {
     setLoading(true); setRemoteMatches([]);
     try {
-      const companies = await buscarEmpresasPorDocumentoSocio(onlyDigits(input));
+      const companies = await buscarEmpresasPorDocumentoSocio(onlyDigits(input), socioUf);
       const results = companies.map((c) => ({
         company: c, reason: "Minha Receita", partnerMatches: c.socios || [], documentMatches: c.socios || [], matched: true,
       }));
       setRemoteMatches(results);
       if (!results.length) setError({ type: "notfound", msg: "Nenhuma empresa encontrada. Tente CPF completo (11 dig.), CNPJ completo (14 dig.) ou 6 dig. centrais do CPF." });
     } catch (e) {
-      if (e?.details?.isUnavailable || e?.message?.includes("indisponivel")) {
-        setError({ type: "ratelimit", msg: "Busca remota por documento indisponivel nesta fonte. Resultados abaixo sao do historico local." });
+      if (e?.details?.isUnavailable) {
+        setError({ type: "ratelimit", msg: e.message || "Busca remota indisponivel nesta fonte. Resultados abaixo sao do historico local." });
       } else {
         setError({ type: "network", msg: e?.message || "Falha na busca por documento de socio." });
       }
     } finally { setLoading(false); }
-  }, [input]);
+  }, [input, socioUf]);
 
   const consultar = useCallback(async () => {
     setError(null); setShowRaw(false);
@@ -288,6 +294,18 @@ export default function App() {
               inputMode={mode === "company" || mode === "partner" ? "text" : "numeric"}
               aria-label={activeMode.label}
             />
+            {mode === "document" && (
+              <select
+                className="query-input mono"
+                style={{ maxWidth: 90, flex: "0 0 auto" }}
+                value={socioUf}
+                onChange={(e) => setSocioUf(e.target.value)}
+                aria-label="UF do socio"
+              >
+                <option value="">UF (todas)</option>
+                {UFS.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+              </select>
+            )}
             <button className="btn-primary" onClick={consultar} disabled={loading}>
               {loading ? "Consultando..." : mode === "cnpj" ? "Consultar" : "Pesquisar"}
             </button>
@@ -297,7 +315,7 @@ export default function App() {
             {mode === "cnpj" && "Consulta CNPJ.ws com fallback automatico para Minha Receita e BrasilAPI. O resultado e salvo no historico local."}
             {mode === "company" && "Pesquisa no historico local e nas ~20 grandes empresas sugeridas. Para outras empresas, consulte pelo CNPJ primeiro."}
             {mode === "partner" && "Pesquisa por nome de socio no historico local. Nao ha API gratuita de busca global por nome de socio."}
-            {mode === "document" && "Busca global via Minha Receita: CPF completo (11 dig.), CNPJ completo (14 dig.) ou 6 dig. centrais do CPF do socio."}
+            {mode === "document" && "Busca global via Minha Receita: CPF completo (11 dig., a Receita so expoe os 6 digitos centrais por privacidade), CNPJ completo (14 dig.) ou 6 dig. centrais do CPF do socio. Selecionar a UF reduz o tempo de busca e evita timeout."}
           </p>
           {(input || data || error) && (
             <div className="search-actions">

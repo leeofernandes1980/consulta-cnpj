@@ -64,7 +64,7 @@ export async function consultarCnpj(cnpj) {
   );
 }
 
-export async function buscarEmpresasPorDocumentoSocio(documento) {
+export async function buscarEmpresasPorDocumentoSocio(documento, uf) {
   const cleanDocument = onlyDigits(documento);
 
   if (![6, 11, 14].includes(cleanDocument.length)) {
@@ -74,10 +74,14 @@ export async function buscarEmpresasPorDocumentoSocio(documento) {
   }
 
   try {
-    const payload = await fetchMinhaReceitaBySocioDocument(cleanDocument);
+    const payload = await fetchMinhaReceitaBySocioDocument(cleanDocument, uf);
     const companies = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
     return companies.map(normalizeMinhaReceitaToCnpjWsFormat);
   } catch (error) {
-    throw new ConsultaError(error.message, { source: "minha_receita", status: error.status || null });
+    throw new ConsultaError(error.message, {
+      source: "minha_receita",
+      status: error.status || null,
+      isUnavailable: error.isUnavailable || false,
+    });
   }
 }

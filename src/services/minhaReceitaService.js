@@ -44,7 +44,16 @@ export async function fetchMinhaReceitaByCnpj(cnpj) {
   return response.json();
 }
 
-export async function fetchMinhaReceitaBySocioDocument(documento) {
+// A Receita Federal publica o CPF do socio mascarado (so os 6 digitos
+// centrais ficam visiveis, ex: ***456789**). A busca por CPF so encontra
+// resultado se enviarmos o documento nesse mesmo formato mascarado.
+function maskSocioCpf(cleanDocument) {
+  if (cleanDocument.length === 14) return cleanDocument;
+  const middleSix = cleanDocument.length === 11 ? cleanDocument.slice(3, 9) : cleanDocument;
+  return `***${middleSix}**`;
+}
+
+export async function fetchMinhaReceitaBySocioDocument(documento, uf) {
   const cleanDocument = onlyDigits(documento);
 
   if (![6, 11, 14].includes(cleanDocument.length)) {
@@ -53,12 +62,15 @@ export async function fetchMinhaReceitaBySocioDocument(documento) {
     );
   }
 
+  const params = new URLSearchParams({ cnpf: maskSocioCpf(cleanDocument), limit: "20" });
+  if (uf) params.set("uf", uf.toUpperCase());
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 9000);
 
   try {
     const response = await fetch(
-      `${MINHA_RECEITA_BASE_URL}/?cnpf=${cleanDocument}&limit=20`,
+      `${MINHA_RECEITA_BASE_URL}/?${params.toString()}`,
       { signal: controller.signal }
     );
     clearTimeout(timeoutId);
@@ -87,7 +99,9 @@ export async function fetchMinhaReceitaBySocioDocument(documento) {
     clearTimeout(timeoutId);
     if (error.name === "AbortError") {
       const e = new MinhaReceitaError(
-        "Busca remota por documento de sócio indisponível nesta fonte gratuita.",
+        uf
+          ? "Busca por documento de sócio expirou (timeout) mesmo filtrando por UF. Tente novamente em instantes."
+          : "Busca por documento de sócio expirou (timeout). Selecione a UF do sócio para reduzir o escopo da busca.",
         null
       );
       e.isUnavailable = true;
