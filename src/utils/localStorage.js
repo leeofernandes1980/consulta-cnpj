@@ -1,4 +1,3 @@
-import { maskCnpj } from "./cnpj";
 import { flattenForCsv, getCompanyCnpj } from "./company";
 
 export const STORAGE_KEY = "consulta-cnpj:empresas";
@@ -31,7 +30,9 @@ export function readHistory() {
 export function writeHistory(companies) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(companies));
-  } catch {}
+  } catch (error) {
+    console.error("Erro ao gravar historico:", error);
+  }
 }
 
 export function upsertCompany(list, company) {
