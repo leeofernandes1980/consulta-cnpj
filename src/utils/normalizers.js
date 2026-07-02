@@ -128,10 +128,13 @@ export function normalizeMinhaReceitaToCnpjWsFormat(data) {
       cnpj_digito_verificador: cnpj.slice(12, 14),
       tipo: getFirstValue(data.descricao_identificador_matriz_filial),
       nome_fantasia: getFirstValue(data.nome_fantasia),
-      situacao_cadastral: getFirstValue(
-        data.descricao_situacao_cadastral,
-        data.situacao
-      ),
+      situacao_cadastral: {
+        id: getFirstValue(data.codigo_situacao_cadastral),
+        descricao: getFirstValue(
+          data.descricao_situacao_cadastral,
+          data.situacao
+        ),
+      },
       data_situacao_cadastral: getFirstValue(data.data_situacao_cadastral),
       data_inicio_atividade: getFirstValue(
         data.data_inicio_atividade,
@@ -165,7 +168,7 @@ export function normalizeMinhaReceitaToCnpjWsFormat(data) {
       },
 
       atividade_principal: {
-        id: getFirstValue(data.cnae_fiscal),
+        subclasse: getFirstValue(data.cnae_fiscal),
         descricao: getFirstValue(data.cnae_fiscal_descricao),
       },
 
@@ -178,6 +181,26 @@ export function normalizeMinhaReceitaToCnpjWsFormat(data) {
 
     raw: data,
   };
+}
+
+export function normalizeBrasilApiToCnpjWsFormat(data) {
+  if (!data || typeof data !== "object") return data;
+  const mapped = {
+    ...data,
+    cnae_fiscal: String(data.cnae_fiscal ?? ""),
+    capital_social: String(data.capital_social ?? ""),
+    descricao_situacao_cadastral: data.descricao_situacao_cadastral || String(data.situacao_cadastral || ""),
+    qsa: Array.isArray(data.qsa)
+      ? data.qsa.map((s) => ({
+          ...s,
+          qualificacao_socio:
+            s.qualificacao_socio && typeof s.qualificacao_socio === "object"
+              ? s.qualificacao_socio.descricao || ""
+              : s.qualificacao_socio,
+        }))
+      : [],
+  };
+  return { ...normalizeMinhaReceitaToCnpjWsFormat(mapped), fonte: "brasil_api" };
 }
 
 export function normalizeCnpjWs(data) {

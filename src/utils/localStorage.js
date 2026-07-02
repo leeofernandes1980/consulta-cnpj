@@ -1,88 +1,70 @@
-export const STORAGE_KEYS = {
-  empresas: "consulta-cnpj:empresas",
-};
+import { maskCnpj } from "./cnpj";
+import { flattenForCsv, getCompanyCnpj } from "./company";
 
-export function readLocalStorage(key, fallbackValue = null) {
+export const STORAGE_KEY = "consulta-cnpj:empresas";
+const STALE_MS = 7 * 24 * 60 * 60 * 1000;
+const EXPIRED_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function getEntryAgeMs(entry) {
+  const ts = entry?.consultedAt || entry?._savedAt;
+  if (!ts) return 0;
+  return Date.now() - new Date(ts).getTime();
+}
+
+export function isStaleEntry(entry) {
+  return getEntryAgeMs(entry) > STALE_MS;
+}
+
+export function isExpiredEntry(entry) {
+  return getEntryAgeMs(entry) > EXPIRED_MS;
+}
+
+export function readHistory() {
   try {
-    const storedValue = window.localStorage.getItem(key);
-
-    if (!storedValue) {
-      return fallbackValue;
-    }
-
-    return JSON.parse(storedValue);
-  } catch (error) {
-    console.error("Erro ao ler localStorage:", error);
-    return fallbackValue;
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((e) => !isExpiredEntry(e)) : [];
+  } catch {
+    return [];
   }
 }
 
-export function writeLocalStorage(key, value) {
+export function writeHistory(companies) {
   try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (error) {
-    console.error("Erro ao gravar localStorage:", error);
-    return false;
-  }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(companies));
+  } catch {}
 }
 
-export function removeLocalStorage(key) {
-  try {
-    window.localStorage.removeItem(key);
-    return true;
-  } catch (error) {
-    console.error("Erro ao remover localStorage:", error);
-    return false;
-  }
+export function upsertCompany(list, company) {
+  const cnpj = getCompanyCnpj(company);
+  if (!cnpj) return list;
+  const entry = { ...company, consultedAt: new Date().toISOString() };
+  return [entry, ...list.filter((c) => getCompanyCnpj(c) !== cnpj)].slice(0, 60);
 }
 
-export function readCompanyHistory() {
-  return readLocalStorage(STORAGE_KEYS.empresas, []);
+export function exportJson(companies) {
+  const blob = new Blob([JSON.stringify(companies, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cnpjs-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-export function saveCompanyHistory(companies) {
-  return writeLocalStorage(STORAGE_KEYS.empresas, companies);
-}
-
-export function clearCompanyHistory() {
-  return removeLocalStorage(STORAGE_KEYS.empresas);
-}
-
-export function upsertCompanyInHistory(company) {
-  const currentHistory = readCompanyHistory();
-
-  const cnpj =
-    company?.cnpj ||
-    company?.estabelecimento?.cnpj ||
-    company?.raw?.estabelecimento?.cnpj ||
-    "";
-
-  if (!cnpj) {
-    return currentHistory;
-  }
-
-  const normalizedCnpj = String(cnpj).replace(/\D/g, "");
-
-  const companyToSave = {
-    ...company,
-    cnpj: normalizedCnpj,
-    consultedAt: company?.consultedAt || new Date().toISOString(),
-  };
-
-  const withoutDuplicated = currentHistory.filter((item) => {
-    const itemCnpj =
-      item?.cnpj ||
-      item?.estabelecimento?.cnpj ||
-      item?.raw?.estabelecimento?.cnpj ||
-      "";
-
-    return String(itemCnpj).replace(/\D/g, "") !== normalizedCnpj;
+export function exportCsv(companies) {
+  const headers = ["CNPJ", "Razao Social", "Nome Fantasia", "Situacao", "Cidade", "UF", "CNAE", "Telefone", "Email", "Consultado Em"];
+  const rows = companies.map((c) => {
+    const f = flattenForCsv(c);
+    return [f.cnpj, f.razao_social, f.nome_fantasia, f.situacao, f.cidade, f.uf, f.cnae, f.telefone, f.email, f.consultedAt]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",");
   });
-
-  const updatedHistory = [companyToSave, ...withoutDuplicated];
-
-  saveCompanyHistory(updatedHistory);
-
-  return updatedHistory;
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cnpjs-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

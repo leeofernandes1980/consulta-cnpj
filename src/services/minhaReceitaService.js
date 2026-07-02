@@ -53,28 +53,46 @@ export async function fetchMinhaReceitaBySocioDocument(documento) {
     );
   }
 
-  const response = await fetch(`${MINHA_RECEITA_BASE_URL}/?cnpf=${cleanDocument}&limit=20`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 9000);
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new MinhaReceitaError(
-        "Nenhuma empresa encontrada para o documento informado.",
-        response.status
-      );
-    }
-
-    if (response.status === 429) {
-      throw new MinhaReceitaError(
-        "Limite de consultas atingido na Minha Receita.",
-        response.status
-      );
-    }
-
-    throw new MinhaReceitaError(
-      `Erro ao buscar sócio na Minha Receita. Código HTTP: ${response.status}`,
-      response.status
+  try {
+    const response = await fetch(
+      `${MINHA_RECEITA_BASE_URL}/?cnpf=${cleanDocument}&limit=20`,
+      { signal: controller.signal }
     );
-  }
+    clearTimeout(timeoutId);
 
-  return response.json();
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new MinhaReceitaError(
+          "Nenhuma empresa encontrada para o documento informado.",
+          response.status
+        );
+      }
+      if (response.status === 429) {
+        throw new MinhaReceitaError(
+          "Limite de consultas atingido na Minha Receita.",
+          response.status
+        );
+      }
+      throw new MinhaReceitaError(
+        `Erro ao buscar sócio na Minha Receita. Código HTTP: ${response.status}`,
+        response.status
+      );
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      const e = new MinhaReceitaError(
+        "Busca remota por documento de sócio indisponível nesta fonte gratuita.",
+        null
+      );
+      e.isUnavailable = true;
+      throw e;
+    }
+    throw error;
+  }
 }
