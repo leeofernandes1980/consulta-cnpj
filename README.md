@@ -1,16 +1,47 @@
-# React + Vite
+# Consulta CNPJ
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicação web para consultar dados públicos de empresas por CNPJ, buscar por nome de sócio/empresa no histórico local e localizar empresas pelo CPF/CNPJ de um sócio.
 
-Currently, two official plugins are available:
+## Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Consulta por CNPJ** com fallback automático entre três fontes gratuitas: [CNPJ.ws](https://cnpj.ws), [Minha Receita](https://minhareceita.org) e [BrasilAPI](https://brasilapi.com.br).
+- **Busca em lote** de vários CNPJs de uma vez.
+- **Busca por sócio**: nome (no histórico local) ou CPF/CNPJ (via Minha Receita, com filtro de UF).
+- **Histórico local**: empresas consultadas ficam salvas no navegador (`localStorage`), com detecção de entradas antigas/expiradas.
+- **Exportação** do histórico em CSV e JSON.
 
-## React Compiler
+## Rodando localmente
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Abre em `http://localhost:5173`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Outros comandos:
+
+```bash
+npm run build    # build de producao
+npm run preview  # preview do build
+npm run lint      # eslint
+```
+
+## Deploy
+
+Projeto pronto para deploy na [Vercel](https://vercel.com) (detecta Vite automaticamente).
+
+O acesso é protegido por autenticação HTTP Basic via Edge Middleware ([middleware.js](middleware.js)). Configure estas variáveis de ambiente no painel da Vercel antes do deploy:
+
+| Variável | Descrição |
+|---|---|
+| `BASIC_AUTH_USER` | usuário para acessar a aplicação |
+| `BASIC_AUTH_PASSWORD` | senha para acessar a aplicação |
+
+## Stack
+
+React + Vite, Tailwind CSS. Sem backend próprio — todas as consultas são feitas direto do navegador para APIs públicas gratuitas, sem chaves de API.
+
+## Privacidade
+
+O CPF de sócios pessoa física é exibido parcialmente mascarado (`***XXXXXX**`), conforme publicado pela Receita Federal. O histórico de consultas fica salvo apenas no navegador de cada usuário, não é compartilhado.
